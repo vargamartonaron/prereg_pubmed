@@ -124,67 +124,45 @@ def fetch_articles(pubmed_df, email='martonaronvarga@gmail.com'):
 
 def parse_author_emails(results):
     pattern = r'[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+'
-    
     df = pd.DataFrame(columns=["pubmedid", "email", "message"])
 
-    for data in results: 
+    for data in results:  
         # Get the PubmedArticle array
-        pubmedarticles = data['PubmedArticle']
+        pubmedarticles = data.get('PubmedArticle', [])
         # Get the PubmedBookArticle array
-        pubmedbookarticles = data['PubmedBookArticle']
+        pubmedbookarticles = data.get('PubmedBookArticle', [])
 
-    # Iterate over each article
-    if len(pubmedarticles)>0:
+        # Iterate over each article
         for article in pubmedarticles:
-            # Get pubmedid of the result
             pubmed_id = str(article['MedlineCitation']['PMID'])
-
-            # Check if there are authors
             if 'AuthorList' not in article['MedlineCitation']['Article']:
                 df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'No authors found.'}])])
                 continue
 
-            # Get author list from the result
             author_list = article['MedlineCitation']['Article']['AuthorList']
-
-            # Email addresses are at the end of the affiliation of some authors (sometimes multiple)
-            # We iterate through each author of the given article
-            # and extract all the email addresses
             for author in author_list:
-                # Check if the last name is available
                 if 'LastName' not in author:
                     last_name = np.NaN
                 else:
-                    # Last name
                     last_name = author['LastName']
-                # Get the affiliation of the author
-                # It is possible that an author has multiple affiliations
-                # Since we do not know which affiliation contains the email address
-                # Check if affiliations are present
                 if 'AffiliationInfo' not in author:
                     df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No affiliation found.'}])])
                     continue
                 affiliation_list = author['AffiliationInfo']
                 for affiliation in affiliation_list:
-                    # Search email
                     email_match = re.search(pattern, affiliation['Affiliation'])
-                    # If there is a match save email
                     if email_match:
                         df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": email_match.group(), "message": 'None'}])])
-                    # Otherwise, save NA
                     else:
                         df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No email found'}])])
 
         # Iterate over each book article
-        if len(pubmedbookarticles)>0:
-            for bookarticle in pubmedbookarticles:
-                # Get pubmedid of the result
-                pubmed_id = str(bookarticle['BookDocument']['PMID'])
-                df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle'}])])
+        for bookarticle in pubmedbookarticles:
+            pubmed_id = str(bookarticle['BookDocument']['PMID'])
+            df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle'}])])
 
     df['email'] = df['email'].replace('NaN', np.nan)
-
-    # Count the number of extracted email addresses without duplicates
     unique_emails = df['email'].nunique()
     print(f"Found {unique_emails} unique email addresses.")
     return df
+
