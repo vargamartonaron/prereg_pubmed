@@ -124,9 +124,9 @@ def fetch_articles(pubmed_df, email='martonaronvarga@gmail.com'):
 
 def parse_author_emails(results):
     pattern = r'[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+'
-    df = pd.DataFrame(columns=["pubmedid", "email", "message"])
+    data_list = []  # Collect data in a list
 
-    for data in results:  
+    for data in results:
         # Get the PubmedArticle array
         pubmedarticles = data.get('PubmedArticle', [])
         # Get the PubmedBookArticle array
@@ -136,7 +136,7 @@ def parse_author_emails(results):
         for article in pubmedarticles:
             pubmed_id = str(article['MedlineCitation']['PMID'])
             if 'AuthorList' not in article['MedlineCitation']['Article']:
-                df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'No authors found.'}])])
+                data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'No authors found.'})
                 continue
 
             author_list = article['MedlineCitation']['Article']['AuthorList']
@@ -146,23 +146,25 @@ def parse_author_emails(results):
                 else:
                     last_name = author['LastName']
                 if 'AffiliationInfo' not in author:
-                    df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No affiliation found.'}])])
+                    data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No affiliation found.'})
                     continue
                 affiliation_list = author['AffiliationInfo']
                 for affiliation in affiliation_list:
                     email_match = re.search(pattern, affiliation['Affiliation'])
                     if email_match:
-                        df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": email_match.group(), "message": 'None'}])])
+                        data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": email_match.group(), "message": 'None'})
                     else:
-                        df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No email found'}])])
+                        data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No email found'})
 
         # Iterate over each book article
         for bookarticle in pubmedbookarticles:
             pubmed_id = str(bookarticle['BookDocument']['PMID'])
-            df = pd.concat([df, pd.DataFrame([{"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle'}])])
+            data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle'})
 
+        print(f"Processed {len(pubmedarticles)} PubmedArticle(s) and {len(pubmedbookarticles)} PubmedBookArticle(s).")
+
+    df = pd.DataFrame(data_list)
     df['email'] = df['email'].replace('NaN', np.nan)
     unique_emails = df['email'].nunique()
     print(f"Found {unique_emails} unique email addresses.")
     return df
-
