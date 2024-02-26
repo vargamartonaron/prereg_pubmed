@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import time
 import numpy as np
 import re
+from urllib.error import HTTPError
 
 # This function reads the CSV file and returns the top 10 journals based on the 5-year JIF for each category
 
@@ -33,8 +34,11 @@ def process_csv():
     # Return the 'ISSN' values as a list
     return top_rows['ISSN'].tolist()
 
-def fetch_pubmed_ids_for_issns(issn_list, email='martonaronvarga@gmail.com'):
-    Entrez.email = email
+def ask_email():
+    Entrez.email = input("Please enter your email address to use with requests: ")
+    return None
+
+def fetch_pubmed_ids_for_issns(issn_list):
     one_year_ago = (datetime.now() - timedelta(days=365)).strftime('%Y/%m/%d')
     pubmed_ids = []
 
@@ -89,16 +93,19 @@ def fetch_pubmed_ids_for_issns(issn_list, email='martonaronvarga@gmail.com'):
 
     return pubmed_df
 
-def fetch_articles(pubmed_df, email='martonaronvarga@gmail.com'):
-    Entrez.email = email
+def fetch_articles(pubmed_df):
+    error_encountered = False
     # Post 5000 ids at a time to avoid the 10k limit
     post_batch = 5000
     results = []
     batch_size = 10
     for i in range(0, len(pubmed_df), post_batch):
-        search_results = Entrez.read(Entrez.epost("pubmed", id=",".join(pubmed_df[i:i+post_batch])))
+        search_results = Entrez.read(Entrez.epost("pubmed", id=",".join(pubmed_df['PubMedID'].astype(str)[i:i+post_batch])))
         print(f"Posting records {i} to {i+post_batch}...")
         for start in range(0, post_batch, batch_size):
+            if error_encountered:
+                print("You have likely fetched all posted articles. Stopping the fetching process.")
+                break
             end = min(post_batch, start + batch_size)
             print(f"Fetching records {start} to {end}...")
             attempt = 1
@@ -114,10 +121,15 @@ def fetch_articles(pubmed_df, email='martonaronvarga@gmail.com'):
                     data = Entrez.read(fetch_handle)
                     fetch_handle.close()
                     break
-                except Exception as e:
+                except HTTPError as e:
+                    # Check if the exception is an HTTPError with status code  400
+                    if e.code == 400:
+                        print(f"{e}")
+                        error_encountered = True # Stop fetching if a  400 Bad Request error is encountered
+                        attempt += 1
+                        time.sleep(2)
+                        continue
                     print(f"Attempt {attempt} failed with error: {e}")
-                    attempt += 1
-                    time.sleep(2)
             if data:
                 results.append(data)
     return results
@@ -134,9 +146,10 @@ def parse_author_emails(results):
 
         # Iterate over each article
         for article in pubmedarticles:
+            title = article['MedlineCitation']['Article']['ArticleTitle']
             pubmed_id = str(article['MedlineCitation']['PMID'])
             if 'AuthorList' not in article['MedlineCitation']['Article']:
-                data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'No authors found.'})
+                data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'No authors found.', "title": title})
                 continue
 
             author_list = article['MedlineCitation']['Article']['AuthorList']
@@ -146,20 +159,20 @@ def parse_author_emails(results):
                 else:
                     last_name = author['LastName']
                 if 'AffiliationInfo' not in author:
-                    data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No affiliation found.'})
+                    data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No affiliation found.', "title": title})
                     continue
                 affiliation_list = author['AffiliationInfo']
                 for affiliation in affiliation_list:
                     email_match = re.search(pattern, affiliation['Affiliation'])
                     if email_match:
-                        data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": email_match.group(), "message": 'None'})
+                        data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": email_match.group(), "message": 'None', "title": title})
                     else:
-                        data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No email found'})
+                                         data_list.append({"pubmedid": pubmed_id, "last_name": last_name, "email": np.NaN, "message": 'No email found', "title": title})
 
         # Iterate over each book article
         for bookarticle in pubmedbookarticles:
             pubmed_id = str(bookarticle['BookDocument']['PMID'])
-            data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle'})
+            data_list.append({"pubmedid": pubmed_id, "last_name": np.NaN, "email": np.NaN, "message": 'PubmedBookArticle', "title": np.NaN})
 
         print(f"Processed {len(pubmedarticles)} PubmedArticle(s) and {len(pubmedbookarticles)} PubmedBookArticle(s).")
 
@@ -167,4 +180,42 @@ def parse_author_emails(results):
     df['email'] = df['email'].replace('NaN', np.nan)
     unique_emails = df['email'].nunique()
     print(f"Found {unique_emails} unique email addresses.")
+    # Ensure variable types
+    df['pubmedid'] = df['pubmedid'].astype(str)
+    df['last_name'] = df['last_name'].astype(str)
+    df['email'] = df['email'].astype(str)
+    df['message'] = df['message'].astype(str)
+    df['title'] = df['title'].astype(str)
     return df
+
+# Email filtering function
+
+def filter_emails(emails_df):
+    emails_df = pd.read_csv(f'data/{emails_df}.csv')
+
+    # Aggregate last names of authors
+    aggregation = {
+        'last_name': lambda x: ', '.join(x)
+    }
+
+    # Group by pubmedid, then aggregate
+    df_grouped = emails_df.groupby(['pubmedid', 'email']).agg(aggregation).reset_index()
+
+    # Filter rows with empty emails
+    df_filtered = df_grouped[df_grouped['email'].notna()]
+
+    # Drop the message column if you decide to keep it beforehand
+    # df_filtered = df_filtered.drop(columns=['message'])
+
+    # Save it
+    df_filtered.to_csv("data/emails_filtered.csv")
+
+def create_master_df():
+    pubmed_id_df = pd.read_csv("data/pubmed_id_list.csv")
+    pubmed_id_df = pd.rename({'PubMedID' : "pubmedid", 'ISSN' : 'issn'})
+    df_filtered = pd.read_csv("data/emails_filtered.csv")
+    merged_df = pd.merge(df_filtered, pubmed_id_df, on='pubmedid')
+    journal_df = pd.read_csv('data/all_journals.csv')[["journal_name", "ISSN", "category"]]
+    journal_df = pd.rename({'ISSN' : 'issn'})
+    merged_master = pd.merge(merged_df, journal_df, on='issn')
+    merged_master.to_csv("data/merged_master.csv")
