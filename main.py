@@ -13,8 +13,8 @@ issn_list = hp.process_csv()
 hp.ask_email()
 
 pubmed_id_df = hp.fetch_pubmed_ids_for_issns(issn_list)
-pubmed_id_df.to_csv("data/pubmed_id_df.csv")
-print("Saved PubMed IDs to data/pubmed_id_df.csv")
+pubmed_id_df.to_csv("data/pubmed_id_list.csv")
+print("Saved PubMed IDs to data/pubmed_id_list.csv")
 
 pubmed_id_df = pd.read_csv('data/pubmed_id_list.csv', usecols = ["PubMedID"], dtype = str)
 # Post 5000 articles at a time then fetch batches of 10 iteratively
