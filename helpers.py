@@ -212,10 +212,11 @@ def filter_emails(emails_df):
 
 def create_master_df():
     pubmed_id_df = pd.read_csv("data/pubmed_id_list.csv")
-    pubmed_id_df = pd.rename({'PubMedID' : "pubmedid", 'ISSN' : 'issn'})
+    pubmed_id_df = pubmed_id_df.rename(columns={'PubMedID' : "pubmedid", 'ISSN' : 'issn'})
     df_filtered = pd.read_csv("data/emails_filtered.csv")
-    merged_df = pd.merge(df_filtered, pubmed_id_df, on='pubmedid')
+    merged_df = pd.merge(df_filtered, pubmed_id_df, on='pubmedid', how='inner')
     journal_df = pd.read_csv('data/all_journals.csv')[["journal_name", "ISSN", "category"]]
-    journal_df = pd.rename({'ISSN' : 'issn'})
-    merged_master = pd.merge(merged_df, journal_df, on='issn')
-    merged_master.to_csv("data/merged_master.csv")
+    journal_df = journal_df.rename(columns={'ISSN' : 'issn'})
+    merged_master = pd.merge(merged_df, journal_df, on='issn', how='left')
+    merged_master = merged_master.loc[:, ~merged_master.columns.str.contains('Unnamed')]
+    merged_master.to_csv("data/merged_master.csv", index=False)
