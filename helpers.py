@@ -202,7 +202,7 @@ def filter_emails():
     }
 
     # Group by pubmedid, then aggregate
-    df_grouped = emails_df.groupby(['pubmedid', 'email']).agg(aggregation).reset_index()
+    df_grouped = emails_df.groupby(['pubmedid', 'email', 'title']).agg(aggregation).reset_index()
 
     # Filter rows with empty emails
     df_filtered = df_grouped[df_grouped['email'].notna()]
