@@ -129,7 +129,10 @@ def fetch_articles(pubmed_df):
                         attempt += 1
                         time.sleep(2)
                         continue
-                    print(f"Attempt {attempt} failed with error: {e}")
+                except Exception as ex:
+                    print(f"Attempt {attempt} failed with error: {ex}")
+                    attempt +=1
+                    time.sleep(2)
             if data:
                 results.append(data)
     return results
@@ -190,8 +193,8 @@ def parse_author_emails(results):
 
 # Email filtering function
 
-def filter_emails(emails_df):
-    emails_df = pd.read_csv(f'data/{emails_df}.csv')
+def filter_emails():
+    emails_df = pd.read_csv('data/emails_df.csv')
 
     # Aggregate last names of authors
     aggregation = {

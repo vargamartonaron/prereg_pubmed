@@ -26,7 +26,7 @@ emails_path = os.path.abspath("data/emails_df.csv")
 emails_df.to_csv(emails_path)
 print(f"Saved emails to {emails_path}")
 
-hp.filter_emails(emails_df)
+hp.filter_emails()
 print("Filtered emails")
 hp.create_master_df()
 print("Created master dataframe")
