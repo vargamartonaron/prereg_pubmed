@@ -40,6 +40,7 @@ def ask_email():
 
 def fetch_pubmed_ids_for_issns(issn_list):
     one_year_ago = (datetime.now() - timedelta(days=365)).strftime('%Y/%m/%d')
+    today = datetime.now().strftime('%Y/%m/%d')
     pubmed_ids = []
 
     for issn in issn_list:
@@ -50,7 +51,7 @@ def fetch_pubmed_ids_for_issns(issn_list):
                 # Search PubMed for articles with the given ISSN
                 handle = Entrez.esearch(
                     db='pubmed',
-                    term=f'{issn}[ta] AND {one_year_ago}[dp] :   2024/02/13[dp]',
+                    term=f'{issn}[ta] AND {one_year_ago}[dp] :   {today}[dp]',
                     retstart=start,
                     retmax=max_results
                 )
